@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ServiceDesk Copilot</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #fff; --ink: #1d232b; --muted: #66707c; --line: #e2e5ea;
+    --accent: #0b5cad; --critical: #b3261e; --high: #c76a00; --normal: #2f6f4f; --low: #5f6b7a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  header { background: #12171d; color: #fff; padding: 14px 28px; display: flex; align-items: baseline; gap: 14px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  header span { color: #9aa4b0; font-size: 13px; }
+  header a { margin-left: auto; color: #9ac4ff; font-size: 13px; }
+  main { max-width: 1180px; margin: 24px auto; padding: 0 20px; display: grid; grid-template-columns: 420px 1fr; gap: 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+  textarea { min-height: 120px; resize: vertical; }
+  .row { display: flex; gap: 10px; } .row > * { flex: 1; }
+  button { margin-top: 14px; background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); margin-left: 6px; }
+  .examples { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .examples a { color: var(--accent); cursor: pointer; margin-right: 8px; white-space: nowrap; }
+  .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
+  .u-critical { background: var(--critical); } .u-high { background: var(--high); }
+  .u-normal { background: var(--normal); } .u-low { background: var(--low); }
+  #result { margin-top: 16px; display: none; border-top: 1px solid var(--line); padding-top: 14px; }
+  #result pre { white-space: pre-wrap; background: #f7f8fa; border: 1px solid var(--line); border-radius: 6px; padding: 10px; font: 13px/1.45 system-ui, sans-serif; }
+  .kv { font-size: 13px; color: var(--muted); } .kv b { color: var(--ink); font-weight: 600; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stat { background: #f7f8fa; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .stat .n { font-size: 22px; font-weight: 700; } .stat .l { font-size: 12px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); padding: 6px 8px; }
+  td { border-bottom: 1px solid var(--line); padding: 7px 8px; vertical-align: top; }
+  td.msg { max-width: 300px; color: #39424d; }
+  td.ref { white-space: nowrap; } td select { width: auto; min-width: 150px; padding: 4px 6px; font-size: 12px; }
+  main { max-width: 1320px; }
+  .filters { display: flex; gap: 8px; margin-bottom: 10px; } .filters select { width: auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>ServiceDesk Copilot</h1><span>AI triage for customer-service requests · EN / DE</span>
+  <a href="/docs">API docs</a>
+</header>
+<main>
+  <section class="card">
+    <h2>New customer request</h2>
+    <form id="f">
+      <div class="row">
+        <div><label for="name">Customer name</label><input id="name" maxlength="120"></div>
+        <div><label for="email">E-mail</label><input id="email" type="email"></div>
+      </div>
+      <label for="channel">Channel</label>
+      <select id="channel"><option>web</option><option>email</option><option>phone</option><option>chat</option></select>
+      <label for="msg">Message</label>
+      <textarea id="msg" required minlength="5" placeholder="Describe the issue…"></textarea>
+      <div class="examples">Try:
+        <a data-ex="My car broke down on the A100 and won't start. I'm stranded with two kids, please help asap.">breakdown</a>
+        <a data-ex="Hallo, meine Wallbox lädt seit gestern nicht mehr, das Ladekabel blinkt rot. Was kann ich tun?">Wallbox (DE)</a>
+        <a data-ex="I was charged twice for my last inspection. Please refund the second payment, invoice 4471.">invoice</a>
+        <a data-ex="Unfall auf der Autobahn, Rauch aus dem Motorraum!">Unfall (DE)</a>
+      </div>
+      <button type="submit">Create ticket</button><button type="button" class="ghost" id="dry">Triage only</button>
+    </form>
+    <div id="result"></div>
+  </section>
+
+  <section class="card">
+    <h2>Queue</h2>
+    <div class="stats" id="stats"></div>
+    <div class="filters">
+      <select id="fu"><option value="">All urgencies</option><option>critical</option><option>high</option><option>normal</option><option>low</option></select>
+      <select id="fs"><option value="">All statuses</option><option>new</option><option>in_progress</option><option>waiting_for_customer</option><option>resolved</option></select>
+    </div>
+    <table>
+      <thead><tr><th>Ref</th><th>Urgency</th><th>Category</th><th>Lang</th><th>Message</th><th>Status</th><th>ServiceNow</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="7">Loading…</td></tr></tbody>
+    </table>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pill = (u) => `<span class="pill u-${esc(u)}">${esc(u)}</span>`;
+
+document.querySelectorAll("[data-ex]").forEach(a => a.onclick = () => { $("msg").value = a.dataset.ex; });
+
+function body() {
+  const b = { message: $("msg").value, channel: $("channel").value };
+  if ($("name").value) b.customer_name = $("name").value;
+  if ($("email").value) b.customer_email = $("email").value;
+  return b;
+}
+
+async function send(url) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body()) });
+  const data = await r.json();
+  if (!r.ok) { $("result").style.display = "block"; $("result").innerHTML = `<p style="color:var(--critical)">${esc(JSON.stringify(data.detail))}</p>`; return null; }
+  return data;
+}
+
+function showResult(d, saved) {
+  $("result").style.display = "block";
+  $("result").innerHTML = `
+    <div class="kv">${saved ? `<b>${esc(d.reference)}</b> · ` : "Dry run · "}${pill(d.urgency)} <b>${esc(d.category_label)}</b>
+      · language <b>${esc(d.language)}</b> · confidence <b>${Math.round(d.confidence * 100)}%</b> · engine <b>${esc(d.engine)}</b></div>
+    ${d.matched ? `<div class="kv" style="margin-top:6px">Why: ${esc([].concat(d.matched).join(", ") || "no keywords – default")}</div>` : ""}
+    ${d.suggested_reply ? `<h2 style="margin-top:12px">Suggested reply</h2><pre>${esc(d.suggested_reply)}</pre>` : ""}`;
+}
+
+$("f").onsubmit = async (e) => { e.preventDefault(); const d = await send("/api/tickets"); if (d) { showResult(d, true); load(); } };
+$("dry").onclick = async () => { if (!$("f").reportValidity()) return; const d = await send("/api/triage"); if (d) showResult(d, false); };
+
+async function setStatus(ref, status) {
+  await fetch(`/api/tickets/${ref}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+  load();
+}
+window.setStatus = setStatus;
+
+async function load() {
+  const p = new URLSearchParams();
+  if ($("fu").value) p.set("urgency", $("fu").value);
+  if ($("fs").value) p.set("status", $("fs").value);
+  const [tickets, s] = await Promise.all([fetch("/api/tickets?" + p).then(r => r.json()), fetch("/api/stats").then(r => r.json())]);
+  const u = s.by_urgency || {};
+  $("stats").innerHTML = [["Total", s.total], ["Critical", u.critical || 0], ["High", u.high || 0], ["Open", s.total - ((s.by_status || {}).resolved || 0)]]
+    .map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+  const statuses = ["new", "in_progress", "waiting_for_customer", "resolved"];
+  $("rows").innerHTML = tickets.length ? tickets.map(t => `<tr>
+      <td class="ref"><b>${esc(t.reference)}</b></td><td>${pill(t.urgency)}</td><td>${esc(t.category_label)}</td><td>${esc(t.language)}</td>
+      <td class="msg">${esc(t.message.length > 110 ? t.message.slice(0, 110) + "…" : t.message)}</td>
+      <td><select onchange="setStatus('${esc(t.reference)}', this.value)">${statuses.map(s => `<option ${s === t.status ? "selected" : ""}>${s}</option>`).join("")}</select></td>
+      <td>${esc(t.servicenow_number || "–")}</td></tr>`).join("")
+    : `<tr><td colspan="7" style="color:var(--muted)">No tickets yet – create one on the left.</td></tr>`;
+}
+$("fu").onchange = load; $("fs").onchange = load;
+load();
+</script>
+</body>
+</html>

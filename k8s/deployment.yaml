@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: servicedesk-api
+  namespace: servicedesk
+  labels: { app: servicedesk-api }
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector:
+    matchLabels: { app: servicedesk-api }
+  template:
+    metadata:
+      labels: { app: servicedesk-api }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: api
+          image: servicedesk-copilot:local   # replaced by the CI pipeline / kustomize
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8000 }]
+          envFrom:
+            - configMapRef: { name: servicedesk-config }
+            - secretRef: { name: servicedesk-secrets }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: servicedesk-api
+  namespace: servicedesk
+spec:
+  selector: { app: servicedesk-api }
+  ports: [{ name: http, port: 80, targetPort: http }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: servicedesk-api
+  namespace: servicedesk
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: servicedesk-api }
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: servicedesk-config
+  namespace: servicedesk
+data:
+  APP_ENV: kubernetes

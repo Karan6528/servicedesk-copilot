@@ -1,0 +1,59 @@
+Summary,Issue Type,Priority,Labels,Labels,Labels,Description
+ServiceDesk Copilot MVP,Epic,High,mvp,,,"Triage incoming customer-service requests (EN/DE) automatically, suggest a reply, and hand urgent cases to ServiceNow and Power Automate."
+As an agent I want each request classified into a category,Story,High,triage,backend,sprint-1,"Acceptance criteria:
+- Categories: roadside, workshop, charging/EV, billing, complaint, general
+- Works for English and German
+- Response shows which keywords decided it (explainable)
+- Unit tests for at least 10 example messages"
+As an agent I want urgency detected so critical cases are handled first,Story,Highest,triage,safety,sprint-1,"Acceptance criteria:
+- Levels: critical, high, normal, low
+- Accident/smoke/brake failure => critical
+- An LLM may never lower a 'critical' found by the rules
+- Queue can be filtered by urgency"
+As an agent I want a suggested reply in the customer's language,Story,Medium,triage,sprint-1,,"Acceptance criteria:
+- Reply in DE or EN, with the ticket reference
+- Critical replies mention the emergency number 112 first"
+As an agent I want a web form and a queue view,Story,High,frontend,sprint-1,,"Acceptance criteria:
+- Form: name, e-mail, channel, message; validation errors shown
+- Queue: urgency pill, category, status dropdown, ServiceNow number
+- KPI tiles: total, critical, high, open"
+REST API with OpenAPI docs,Story,High,backend,sprint-1,,"Acceptance criteria:
+- POST /api/tickets, GET list with filters, GET/PATCH by reference
+- POST /api/triage dry run
+- Swagger at /docs"
+Containerise the app with Docker and docker-compose (Postgres),Story,High,devops,docker,sprint-2,"Acceptance criteria:
+- Multi-stage image, non-root user, healthcheck
+- docker compose up starts API + Postgres
+- CI builds the image and runs a smoke test"
+Run on Kubernetes,Story,Medium,devops,kubernetes,sprint-2,"Acceptance criteria:
+- Deployment with liveness/readiness probes, resources, HPA
+- Postgres StatefulSet with PVC
+- Secrets not in git
+- CI deploys to a kind cluster and checks /readyz"
+Deploy to Azure Container Apps with GitHub Actions,Story,High,azure,devops,sprint-2,"Acceptance criteria:
+- Public HTTPS URL
+- Manual workflow builds in ACR and rolls out a new revision
+- Scale to zero to save credit
+- Steps documented in docs/azure.md"
+Create ServiceNow incident for critical/high tickets,Story,High,servicenow,integration,sprint-3,"Acceptance criteria:
+- Table API call with urgency/impact mapping
+- Incident number stored and shown in the queue
+- Failure never breaks ticket creation (logged only)"
+"Notify the team via Power Automate (Teams, Outlook, Excel)",Story,Medium,power-platform,integration,sprint-3,"Acceptance criteria:
+- App calls the flow's HTTP trigger for critical/high
+- Teams message for both, e-mail for critical only
+- Excel row per escalation
+- Flow documented with screenshots"
+Power BI service-desk overview report,Story,Medium,power-bi,reporting,sprint-3,"Acceptance criteria:
+- Data from /api/export.csv
+- KPIs: tickets, open, escalation rate, German share
+- Category x urgency chart, slicers for language/channel"
+Optional: LLM triage via OpenAI / Azure OpenAI with rule fallback,Story,Low,ai,sprint-3,,"Acceptance criteria:
+- Used only when a key is set
+- Invalid or failed LLM answer => rule engine result
+- Tests with mocked API"
+"Write Confluence pages: architecture, runbook, decision log",Task,Medium,docs,confluence,sprint-3,"Acceptance criteria:
+- Architecture diagram
+- Runbook: deploy, rollback, rotate secrets, common errors
+- At least 3 decisions with reasons"
+Spike: evaluate AI coding assistants for this project,Task,Low,ai,research,sprint-2,"Try an AI coding assistant on two stories (e.g. tests, K8s manifests). Note time saved, mistakes it made, what needed human review. Write the findings to Confluence."
