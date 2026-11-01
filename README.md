@@ -2,7 +2,7 @@
 
 ![ci](https://github.com/Karan6528/servicedesk-copilot/actions/workflows/ci.yml/badge.svg)
 
-**AI triage for customer-service requests in German and English.** A request comes in by web, e-mail, phone or chat. The service decides *what it is about* and *how urgent it is*, explains why, and drafts a reply in the customer's language. Urgent cases go straight to **ServiceNow** and to the team through **Power Automate** (Teams, Outlook, Excel). A **Power BI** report shows the queue.
+**AI triage for customer-service requests in German and English.** Agents open any ticket (click a row or search by number) to see the customer's name, e-mail and phone, and can reply by e-mail, call, or copy the suggested reply with one click. A request comes in by web, e-mail, phone or chat. The service decides *what it is about* and *how urgent it is*, explains why, and drafts a reply in the customer's language. Urgent cases go straight to **ServiceNow** and to the team through **Power Automate** (Teams, Outlook, Excel). A **Power BI** report shows the queue.
 
 Runs locally, in **Docker**, on **Kubernetes** and on **Microsoft Azure**. Planned and documented in **Jira** and **Confluence**.
 
@@ -82,7 +82,7 @@ kubectl -n servicedesk port-forward svc/servicedesk-api 8080:80     # http://loc
 | POST | `/api/tickets` | Create a ticket: triage, save, suggested reply, escalation |
 | POST | `/api/triage` | Dry run: classify without saving |
 | GET | `/api/tickets?urgency=&status=&category=` | Queue with filters |
-| GET / PATCH | `/api/tickets/{reference}` | Read / change status |
+| GET / PATCH | `/api/tickets/{reference}` | Read / change status. Accepts `SDC-000002`, `sdc-2` or just `2` |
 | GET | `/api/stats` | Counts by category, urgency, status, language |
 | GET | `/api/export.csv` | Flat export for Power BI |
 | GET | `/healthz`, `/readyz` | Liveness / readiness (incl. active integrations) |

@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
@@ -52,6 +53,7 @@ class TicketIn(BaseModel):
     message: str = Field(min_length=5, max_length=5000)
     customer_name: str | None = Field(default=None, max_length=120)
     customer_email: EmailStr | None = None
+    customer_phone: str | None = Field(default=None, max_length=40, pattern=r"^\+?[0-9 ()/-]{5,40}$")
     channel: Literal["web", "email", "phone", "chat"] = "web"
 
 
@@ -72,6 +74,7 @@ class TicketOut(BaseModel):
     created_at: str
     customer_name: str | None
     customer_email: str | None
+    customer_phone: str | None
     channel: str
     message: str
     language: str
@@ -93,6 +96,7 @@ class TicketOut(BaseModel):
             created_at=iso_utc(t.created_at),
             customer_name=t.customer_name,
             customer_email=t.customer_email,
+            customer_phone=t.customer_phone,
             channel=t.channel,
             message=t.message,
             language=t.language,
@@ -183,6 +187,7 @@ def create_ticket(payload: TicketIn, background: BackgroundTasks, session: Sessi
     t = Ticket(
         customer_name=payload.customer_name,
         customer_email=payload.customer_email,
+        customer_phone=payload.customer_phone,
         channel=payload.channel,
         message=payload.message,
         language=r.language,
@@ -220,9 +225,17 @@ def list_tickets(
     return [TicketOut.of(t) for t in session.scalars(q)]
 
 
+def normalise_reference(raw: str) -> str:
+    """Accept 'SDC-000002', 'sdc-2', 'SDC2' or just '2'."""
+    digits = re.sub(r"\D", "", raw)
+    if not digits:
+        raise HTTPException(404, "ticket not found")
+    return f"SDC-{int(digits):06d}"
+
+
 @app.get("/api/tickets/{reference}", response_model=TicketOut, tags=["tickets"])
 def get_ticket(reference: str, session: Session = Depends(get_session)) -> TicketOut:
-    t = session.scalar(select(Ticket).where(Ticket.reference == reference))
+    t = session.scalar(select(Ticket).where(Ticket.reference == normalise_reference(reference)))
     if t is None:
         raise HTTPException(404, "ticket not found")
     return TicketOut.of(t)
@@ -230,7 +243,7 @@ def get_ticket(reference: str, session: Session = Depends(get_session)) -> Ticke
 
 @app.patch("/api/tickets/{reference}", response_model=TicketOut, tags=["tickets"])
 def update_status(reference: str, upd: StatusUpdate, session: Session = Depends(get_session)) -> TicketOut:
-    t = session.scalar(select(Ticket).where(Ticket.reference == reference))
+    t = session.scalar(select(Ticket).where(Ticket.reference == normalise_reference(reference)))
     if t is None:
         raise HTTPException(404, "ticket not found")
     t.status = upd.status

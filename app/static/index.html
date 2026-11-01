@@ -42,6 +42,27 @@
   td.ref { white-space: nowrap; } td select { width: auto; min-width: 150px; padding: 4px 6px; font-size: 12px; }
   main { max-width: 1320px; }
   .filters { display: flex; gap: 8px; margin-bottom: 10px; } .filters select { width: auto; }
+  .find { display: flex; gap: 8px; margin-bottom: 14px; }
+  .find input { flex: 1; } .find button { margin-top: 0; }
+  #findmsg { font-size: 12px; color: var(--critical); margin: -8px 0 10px; min-height: 0; }
+  button.view { margin: 0; padding: 4px 10px; font-size: 12px; font-weight: 600; background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  tbody tr { cursor: pointer; } tbody tr:hover { background: #f7f9fc; }
+  dialog { border: 0; border-radius: 12px; padding: 0; width: min(640px, 94vw); box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  dialog::backdrop { background: rgba(18,23,29,.45); }
+  .dlg-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+  .dlg-head h3 { margin: 0; font-size: 17px; } .dlg-head .x { margin: 0 0 0 auto; background: transparent; color: var(--muted); font-size: 22px; padding: 0 6px; }
+  .dlg-body { padding: 16px 20px 20px; max-height: 75vh; overflow: auto; }
+  .contact { background: #f7f8fa; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+  .contact .who { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .contact a { color: var(--accent); text-decoration: none; } .contact a:hover { text-decoration: underline; }
+  .contact .line { margin: 2px 0; font-size: 14px; } .contact .none { color: var(--muted); }
+  dl { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; margin: 0 0 14px; font-size: 13px; }
+  dt { color: var(--muted); } dd { margin: 0; }
+  .dlg-body h4 { font-size: 13px; margin: 14px 0 6px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+  .box { white-space: pre-wrap; background: #f7f8fa; border: 1px solid var(--line); border-radius: 6px; padding: 10px; font-size: 13px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .actions a, .actions button { margin: 0; display: inline-block; text-decoration: none; background: var(--accent); color: #fff; border-radius: 6px; padding: 8px 14px; font-weight: 600; font-size: 14px; border: 0; cursor: pointer; }
+  .actions .ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -58,6 +79,8 @@
         <div><label for="name">Customer name</label><input id="name" maxlength="120"></div>
         <div><label for="email">E-mail</label><input id="email" type="email"></div>
       </div>
+      <label for="phone">Phone</label>
+      <input id="phone" type="tel" maxlength="40" placeholder="+49 30 1234567">
       <label for="channel">Channel</label>
       <select id="channel"><option>web</option><option>email</option><option>phone</option><option>chat</option></select>
       <label for="msg">Message</label>
@@ -75,17 +98,28 @@
 
   <section class="card">
     <h2>Queue</h2>
+    <form class="find" id="findf">
+      <input id="findref" placeholder="Find ticket by number, e.g. SDC-000002 or 2" aria-label="Ticket number">
+      <button type="submit">Open</button>
+    </form>
+    <div id="findmsg"></div>
     <div class="stats" id="stats"></div>
     <div class="filters">
       <select id="fu"><option value="">All urgencies</option><option>critical</option><option>high</option><option>normal</option><option>low</option></select>
       <select id="fs"><option value="">All statuses</option><option>new</option><option>in_progress</option><option>waiting_for_customer</option><option>resolved</option></select>
     </div>
     <table>
-      <thead><tr><th>Ref</th><th>Urgency</th><th>Category</th><th>Lang</th><th>Message</th><th>Status</th><th>ServiceNow</th></tr></thead>
-      <tbody id="rows"><tr><td colspan="7">Loading…</td></tr></tbody>
+      <thead><tr><th>Ref</th><th>Urgency</th><th>Category</th><th>Lang</th><th>Message</th><th>Status</th><th>ServiceNow</th><th></th></tr></thead>
+      <tbody id="rows"><tr><td colspan="8">Loading…</td></tr></tbody>
     </table>
   </section>
 </main>
+
+<dialog id="dlg" aria-labelledby="dlg-title">
+  <div class="dlg-head"><h3 id="dlg-title">Ticket</h3><span id="dlg-pill"></span>
+    <button class="x" id="dlg-close" aria-label="Close">×</button></div>
+  <div class="dlg-body" id="dlg-body"></div>
+</dialog>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -97,6 +131,7 @@ function body() {
   const b = { message: $("msg").value, channel: $("channel").value };
   if ($("name").value) b.customer_name = $("name").value;
   if ($("email").value) b.customer_email = $("email").value;
+  if ($("phone").value) b.customer_phone = $("phone").value;
   return b;
 }
 
@@ -134,13 +169,80 @@ async function load() {
   $("stats").innerHTML = [["Total", s.total], ["Critical", u.critical || 0], ["High", u.high || 0], ["Open", s.total - ((s.by_status || {}).resolved || 0)]]
     .map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
   const statuses = ["new", "in_progress", "waiting_for_customer", "resolved"];
-  $("rows").innerHTML = tickets.length ? tickets.map(t => `<tr>
+  $("rows").innerHTML = tickets.length ? tickets.map(t => `<tr data-ref="${esc(t.reference)}">
       <td class="ref"><b>${esc(t.reference)}</b></td><td>${pill(t.urgency)}</td><td>${esc(t.category_label)}</td><td>${esc(t.language)}</td>
       <td class="msg">${esc(t.message.length > 110 ? t.message.slice(0, 110) + "…" : t.message)}</td>
       <td><select onchange="setStatus('${esc(t.reference)}', this.value)">${statuses.map(s => `<option ${s === t.status ? "selected" : ""}>${s}</option>`).join("")}</select></td>
-      <td>${esc(t.servicenow_number || "–")}</td></tr>`).join("")
-    : `<tr><td colspan="7" style="color:var(--muted)">No tickets yet – create one on the left.</td></tr>`;
+      <td>${esc(t.servicenow_number || "–")}</td>
+      <td><button type="button" class="view" data-ref="${esc(t.reference)}">View</button></td></tr>`).join("")
+    : `<tr><td colspan="8" style="color:var(--muted)">No tickets yet – create one on the left.</td></tr>`;
 }
+// ---------------------------------------------------------------- details
+const fmtDate = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+
+function contactBlock(t) {
+  const name = t.customer_name ? esc(t.customer_name) : `<span class="none">No name given</span>`;
+  const email = t.customer_email
+    ? `✉ <a href="mailto:${esc(t.customer_email)}">${esc(t.customer_email)}</a>`
+    : `<span class="none">✉ No e-mail given</span>`;
+  const phone = t.customer_phone
+    ? `☎ <a href="tel:${esc(t.customer_phone.replace(/[^+0-9]/g, ""))}">${esc(t.customer_phone)}</a>`
+    : `<span class="none">☎ No phone given</span>`;
+  return `<div class="contact"><div class="who">${name}</div>
+    <div class="line">${email}</div><div class="line">${phone}</div>
+    <div class="line" style="color:var(--muted);font-size:12px">Contacted us via ${esc(t.channel)}</div></div>`;
+}
+
+async function openDetails(ref) {
+  const r = await fetch(`/api/tickets/${encodeURIComponent(ref)}`);
+  if (!r.ok) return false;
+  const t = await r.json();
+  $("dlg-title").textContent = t.reference;
+  $("dlg-pill").innerHTML = pill(t.urgency);
+  const subject = `Re: your request ${t.reference}`;
+  const mailto = t.customer_email
+    ? `mailto:${encodeURIComponent(t.customer_email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(t.suggested_reply)}`
+    : null;
+  $("dlg-body").innerHTML = `
+    ${contactBlock(t)}
+    <div class="actions" style="margin:-4px 0 16px">
+      ${mailto ? `<a href="${mailto}">Reply by e-mail</a>` : ""}
+      ${t.customer_phone ? `<a class="ghost" href="tel:${esc(t.customer_phone.replace(/[^+0-9]/g, ""))}">Call customer</a>` : ""}
+      <button type="button" class="ghost" id="dlg-copy">Copy reply</button>
+    </div>
+    <dl>
+      <dt>Category</dt><dd>${esc(t.category_label)}</dd>
+      <dt>Status</dt><dd>${esc(t.status.replaceAll("_", " "))}</dd>
+      <dt>Language</dt><dd>${t.language === "de" ? "German" : "English"}</dd>
+      <dt>Created</dt><dd>${esc(fmtDate(t.created_at))}</dd>
+      <dt>Confidence</dt><dd>${Math.round(t.confidence * 100)}% · ${esc(t.engine)}</dd>
+      <dt>ServiceNow</dt><dd>${esc(t.servicenow_number || "–")}</dd>
+    </dl>
+    <h4>Customer message</h4><div class="box">${esc(t.message)}</div>
+    <h4>Suggested reply</h4><div class="box" id="dlg-reply">${esc(t.suggested_reply)}</div>`;
+  $("dlg-copy").onclick = async () => {
+    try { await navigator.clipboard.writeText(t.suggested_reply); $("dlg-copy").textContent = "Copied ✓"; }
+    catch { $("dlg-copy").textContent = "Copy failed – select the text"; }
+  };
+  $("dlg").showModal();
+  return true;
+}
+
+$("dlg-close").onclick = () => $("dlg").close();
+$("dlg").addEventListener("click", (e) => { if (e.target === $("dlg")) $("dlg").close(); }); // click outside closes
+$("rows").addEventListener("click", (e) => {
+  if (e.target.closest("select")) return; // changing status shouldn't open the panel
+  const tr = e.target.closest("[data-ref]");
+  if (tr) openDetails(tr.dataset.ref);
+});
+$("findf").onsubmit = async (e) => {
+  e.preventDefault();
+  const q = $("findref").value.trim();
+  $("findmsg").textContent = "";
+  if (!q) return;
+  if (!(await openDetails(q))) $("findmsg").textContent = `No ticket found for “${q}”.`;
+};
+
 $("fu").onchange = load; $("fs").onchange = load;
 load();
 </script>

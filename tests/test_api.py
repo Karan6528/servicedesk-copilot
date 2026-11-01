@@ -74,3 +74,28 @@ def test_stats_and_csv(client):
     rows = list(csv.DictReader(io.StringIO(client.get("/api/export.csv").text)))
     assert len(rows) == s["total"]
     assert rows[0]["reference"].startswith("SDC-")
+
+
+def test_contact_details_and_lookup_by_number(client):
+    t = client.post(
+        "/api/tickets",
+        json={
+            "message": "My car broke down and won't start",
+            "customer_name": "Siya",
+            "customer_email": "siya@example.com",
+            "customer_phone": "+49 30 1234567",
+        },
+    ).json()
+    assert t["customer_phone"] == "+49 30 1234567"
+    number = int(t["reference"].split("-")[1])
+    for ref in (t["reference"], t["reference"].lower(), str(number), f"SDC{number}"):
+        got = client.get(f"/api/tickets/{ref}")
+        assert got.status_code == 200, ref
+        assert got.json()["customer_email"] == "siya@example.com"
+    assert client.get("/api/tickets/abc").status_code == 404
+    assert client.get("/api/tickets/999999").status_code == 404
+
+
+def test_invalid_phone_rejected(client):
+    r = client.post("/api/tickets", json={"message": "hello world", "customer_phone": "call me maybe"})
+    assert r.status_code == 422

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, Text, create_engine
+from sqlalchemy import DateTime, Float, Integer, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from .config import get_settings
@@ -37,6 +37,7 @@ class Ticket(Base):
 
     customer_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     customer_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    customer_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
     channel: Mapped[str] = mapped_column(String(20), default="web")
     message: Mapped[str] = mapped_column(Text)
 
@@ -59,8 +60,18 @@ engine = create_engine(_settings.database_url, connect_args=_connect_args, pool_
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
+# Columns added after the first release. create_all() only creates missing
+# tables, so older databases get these columns added here.
+_ADDED_COLUMNS = {"customer_phone": "VARCHAR(40)"}
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    existing = {c["name"] for c in inspect(engine).get_columns("tickets")}
+    with engine.begin() as conn:
+        for name, sql_type in _ADDED_COLUMNS.items():
+            if name not in existing:
+                conn.execute(text(f"ALTER TABLE tickets ADD COLUMN {name} {sql_type}"))
 
 
 def get_session():

@@ -29,6 +29,7 @@ def ticket_payload(t: Ticket) -> dict:
         "created_at": iso_utc(t.created_at),
         "customer_name": t.customer_name,
         "customer_email": t.customer_email,
+        "customer_phone": t.customer_phone,
         "channel": t.channel,
         "message": t.message,
         "language": t.language,
@@ -50,7 +51,9 @@ def create_servicenow_incident(settings: Settings, t: Ticket) -> str | None:
     url = f"{base}/api/now/table/incident"
     body = {
         "short_description": f"[{t.urgency.upper()}] {t.category} – {t.reference}",
-        "description": f"Customer: {t.customer_name or '-'} <{t.customer_email or '-'}>\n\n{t.message}",
+        "description": (
+            f"Customer: {t.customer_name or '-'} <{t.customer_email or '-'}> phone: {t.customer_phone or '-'}\n\n{t.message}"
+        ),
         "urgency": SN_URGENCY[t.urgency],
         "impact": SN_IMPACT[t.urgency],
         "category": "inquiry",
