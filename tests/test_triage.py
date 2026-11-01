@@ -16,6 +16,7 @@ CASES = [
     ("Accident on the highway, there is smoke coming from the engine!", "en", "roadside_assistance", "critical"),
     ("Unfall! Rauch aus dem Motorraum.", "de", "roadside_assistance", "critical"),
     ("What are your opening hours on Saturday?", "en", "general_inquiry", "low"),
+    ("Ich habe noch keine Gutschrift für die stornierte Reparatur erhalten.", "de", "billing_invoice", "normal"),
 ]
 
 

@@ -127,6 +127,9 @@ KEYWORDS: dict[str, dict[str, float]] = {
         "preis": 1,
         "kosten": 1,
         "doppelt abgebucht": 3,
+        "storn": 2,
+        "cancellation fee": 2,
+        "credit note": 2,
         "gutschrift": 2,
     },
     "complaint": {

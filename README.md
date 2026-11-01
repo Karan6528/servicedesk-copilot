@@ -8,6 +8,8 @@ Runs locally, in **Docker**, on **Kubernetes** and on **Microsoft Azure**. Plann
 
 ![Web UI](docs/images/ui.png)
 
+![Ticket details with customer contact](docs/images/details.png)
+
 ## Why I built this
 
 In my data science internship I built RAG chatbots. I learned that the useful part of AI in a service team is often not a chatbot. It is the boring first step: reading every incoming message and putting it in the right queue with the right priority. That step has to be fast and explainable, and it has to keep working when an external API is down. So this project uses a transparent rule engine that always works, an optional LLM on top, and integrations that can fail without taking ticket creation down with them.
@@ -40,7 +42,7 @@ python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\
 pip install -r requirements-dev.txt
 uvicorn app.main:app --reload
 # open http://localhost:8000   API docs: http://localhost:8000/docs
-python scripts/seed_demo.py    # 12 demo requests (in a second terminal)
+python scripts/seed_demo.py    # 30 demo requests EN/DE with contact details (second terminal)
 ```
 
 ### 2. Docker (API + PostgreSQL)
