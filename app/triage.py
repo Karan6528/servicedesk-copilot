@@ -60,6 +60,13 @@ KEYWORDS: dict[str, dict[str, float]] = {
         "reifenpanne": 2,
         "springt nicht an": 2,
         "pannenhilfe": 3,
+        "accident": 3,
+        "crash": 3,
+        "smoke": 2,
+        "fire": 2,
+        "unfall": 3,
+        "rauch": 2,
+        "feuer": 2,
     },
     "workshop_repair": {
         "appointment": 2,

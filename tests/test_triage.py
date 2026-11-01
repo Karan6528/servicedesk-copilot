@@ -28,6 +28,13 @@ def test_classify(msg, lang, cat, urg):
     assert 0 <= r.confidence <= 1
 
 
+def test_accident_is_confident_roadside():
+    for msg in ("Accident on the A100, smoke from the engine!", "Unfall auf der A100, Rauch!"):
+        r = classify(msg)
+        assert r.category == "roadside_assistance" and r.urgency == "critical"
+        assert r.confidence == 1.0 and "urgency:" in " ".join(r.matched)
+
+
 def test_explainable_matches():
     r = classify("Wallbox is not charging")
     assert "wallbox" in r.matched
