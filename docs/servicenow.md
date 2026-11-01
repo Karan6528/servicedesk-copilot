@@ -37,11 +37,7 @@ SERVICENOW_USER=admin
 SERVICENOW_PASSWORD=<password>
 ```
 
-Restart the app so it reads the file:
-
-```bash
-uvicorn app.main:app --reload --env-file .env
-```
+Restart the app (it reads `.env` from the project folder on start).
 
 `GET /readyz` should now show `"servicenow": true`.
 

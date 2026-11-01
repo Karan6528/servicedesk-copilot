@@ -8,6 +8,17 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
+
+# Load .env from the project folder, if there is one (real env vars win).
+# Tests set SDC_SKIP_DOTENV so they never talk to your real ServiceNow / flow.
+if not os.getenv("SDC_SKIP_DOTENV"):
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
+    except ImportError:  # python-dotenv is optional
+        pass
 
 
 def _env(name: str, default: str = "") -> str:
