@@ -2,138 +2,134 @@
 
 ![ci](https://github.com/Karan6528/servicedesk-copilot/actions/workflows/ci.yml/badge.svg)
 
-**AI triage for customer-service requests in German and English.** Agents open any ticket (click a row or search by number) to see the customer's name, e-mail and phone, and can reply by e-mail, call, or copy the suggested reply with one click. A request comes in by web, e-mail, phone or chat. The service decides *what it is about* and *how urgent it is*, explains why, and drafts a reply in the customer's language. Urgent cases go straight to **ServiceNow** and to the team through **Power Automate** (Teams, Outlook, Excel). A **Power BI** report shows the queue.
+A small tool that reads customer-service requests (in German or English), figures out what they're about and how urgent they are, and writes a first reply. If something is really urgent, like an accident or a car that won't start on the motorway, it opens a ServiceNow incident and pings the team through Power Automate.
 
-Runs locally, in **Docker**, on **Kubernetes** and on **Microsoft Azure**. Planned and documented in **Jira** and **Confluence**.
+This is what it looks like running on my laptop with about 30 demo tickets:
 
-![Web UI](docs/images/ui.png)
+![ServiceDesk Copilot running locally](docs/images/queue-local.png)
 
-![Ticket details with customer contact](docs/images/details.png)
+Clicking a ticket (or typing its number in the search box) opens the details, with the customer's contact info and buttons to reply by e-mail, call them, or copy the suggested reply:
+
+![Ticket details](docs/images/details.png)
 
 ## Why I built this
 
-In my data science internship I built RAG chatbots. I learned that the useful part of AI in a service team is often not a chatbot. It is the boring first step: reading every incoming message and putting it in the right queue with the right priority. That step has to be fast and explainable, and it has to keep working when an external API is down. So this project uses a transparent rule engine that always works, an optional LLM on top, and integrations that can fail without taking ticket creation down with them.
+During my internship at ScikIQ I built RAG chatbots. What I noticed there: in a real service team, the chatbot is often not the part that saves the most time. The boring first step does. Someone has to read every message, decide "this is a billing question" or "this person is stuck on the Autobahn", and put it in the right queue. That decision should be fast, it should be easy to explain, and it should still work when some external API is down.
 
-I also wanted one project where I use the tools an enterprise IT team actually works with, end to end: containers, Kubernetes, Azure, ITSM, low-code automation and agile tooling.
+So I tried to build exactly that, and I used the project to learn the tools that enterprise IT teams actually use around such a service: Docker, Kubernetes, Azure, ServiceNow, Power Automate, Power BI, Jira and Confluence.
 
-## Architecture
+## How the triage works
+
+I started with simple keyword rules instead of an LLM. Each category (roadside assistance, workshop, charging/EV, billing, complaint, general question) has a list of English and German keywords with weights. The category with the highest score wins, and the confidence is its share of all the points.
+
+Urgency is separate:
+
+- **critical**: someone could be in danger (accident, smoke, brakes failed)
+- **high**: the car can't be driven, or the customer threatens a lawyer
+- **low**: "no rush", opening hours
+- everything else is **normal**
+
+Every result shows which words decided it ("Why: autobahn, unfall, rauch"), so an agent can see immediately whether to trust it.
+
+If you set an OpenAI or Azure OpenAI key, the app asks the model too. But the rules always run, and I added one hard rule: the LLM is never allowed to lower an urgency the rules marked as critical. If the LLM call fails or returns nonsense, the app just uses the rule result.
+
+Testing with demo data also showed me where the rules were weak. For example, "Ich habe noch keine Gutschrift für die stornierte Reparatur erhalten" first landed in Workshop because "Reparatur" scored as high as "Gutschrift". I added cancellation words to the billing list and a test for that sentence. Most fixes went like this: find a wrong case, fix the rule, add a test.
+
+## What's in the project
 
 ![Architecture](docs/images/architecture.png)
 
-| Layer | Technology |
-|---|---|
-| API + UI | Python 3.12, FastAPI, SQLAlchemy 2, vanilla JS |
-| AI | EN/DE rule engine (explainable) + optional OpenAI / Azure OpenAI with fallback |
-| Data | PostgreSQL (Docker/K8s), SQLite (local) |
-| Containers | Docker multi-stage, non-root, healthcheck · docker-compose |
-| Orchestration | Kubernetes: Deployment, probes, HPA, Postgres StatefulSet, Kustomize |
-| Cloud | Azure Container Apps + Azure Container Registry |
-| CI/CD | GitHub Actions: lint → tests → image + compose smoke test → deploy to kind → (manual) Azure |
-| ITSM | ServiceNow Table API (Incidents) |
-| Low-code | Power Automate (Teams / Outlook / Excel), Power BI |
-| Agile | Jira backlog (CSV import), Confluence pages |
+- **App:** Python 3.12, FastAPI, SQLAlchemy. The UI is one plain HTML file with a bit of JavaScript, no framework.
+- **Database:** SQLite when you run it locally, PostgreSQL in Docker and Kubernetes.
+- **Docker:** multi-stage image, runs as a non-root user, has a health check. `docker compose up` starts the app plus Postgres.
+- **Kubernetes:** Deployment with health checks and autoscaling (2–5 pods), Postgres as a StatefulSet, secrets kept out of git.
+- **CI (GitHub Actions):** on every push it lints, runs the tests, builds the image, starts it with Postgres for a quick check, and then deploys everything to a temporary Kubernetes cluster (kind) to make sure the manifests really work.
+- **Azure:** a workflow that deploys to Azure Container Apps. The steps are in [docs/azure.md](docs/azure.md).
+- **ServiceNow:** urgent tickets become incidents through the Table API ([docs/servicenow.md](docs/servicenow.md)).
+- **Power Automate / Power BI:** a flow that posts urgent tickets to Teams, sends an e-mail for critical ones and logs them in Excel. There's also a CSV export for a Power BI report ([docs/power-platform](docs/power-platform/README.md)).
+- **Jira / Confluence:** the backlog as an importable CSV with user stories and acceptance criteria, plus architecture, runbook and decision-log pages ([docs/jira](docs/jira/README.md), [docs/confluence](docs/confluence)).
 
-## Quick start
+## Run it yourself
 
-### 1. Local (Python)
+You only need Python for this:
 
 ```bash
-python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+git clone https://github.com/Karan6528/servicedesk-copilot.git
+cd servicedesk-copilot
+python -m venv .venv
+.venv\Scripts\activate          # on Mac/Linux: source .venv/bin/activate
 pip install -r requirements-dev.txt
 uvicorn app.main:app --reload
-# open http://localhost:8000   API docs: http://localhost:8000/docs
-python scripts/seed_demo.py    # 30 demo requests EN/DE with contact details (second terminal)
 ```
 
-### 2. Docker (API + PostgreSQL)
+Open http://localhost:8000. To fill it with 30 demo requests, run this in a second terminal:
+
+```bash
+python scripts/seed_demo.py
+```
+
+All names, e-mails and phone numbers in the demo are made up.
+
+With Docker (app + PostgreSQL):
 
 ```bash
 docker compose up --build
 ```
 
-### 3. Kubernetes (local with kind)
+On a local Kubernetes cluster with kind:
 
 ```bash
 kind create cluster --name servicedesk --config k8s/kind-config.yaml
 docker build -t servicedesk-copilot:local .
 kind load docker-image servicedesk-copilot:local --name servicedesk
-
 kubectl apply -f k8s/namespace.yaml
 kubectl -n servicedesk create secret generic servicedesk-secrets \
   --from-literal=POSTGRES_PASSWORD=local-pass \
   --from-literal=DATABASE_URL=postgresql+psycopg://servicedesk:local-pass@postgres:5432/servicedesk
 kubectl apply -k k8s/
-kubectl -n servicedesk rollout status deployment/servicedesk-api
-kubectl -n servicedesk port-forward svc/servicedesk-api 8080:80     # http://localhost:8080
+kubectl -n servicedesk port-forward svc/servicedesk-api 8080:80
 ```
-
-### 4. Azure, ServiceNow, Power Platform, Jira
-
-| Guide | What you get |
-|---|---|
-| [docs/azure.md](docs/azure.md) | Public HTTPS URL on Azure Container Apps, CD from GitHub Actions |
-| [docs/servicenow.md](docs/servicenow.md) | Urgent tickets become ServiceNow incidents |
-| [docs/power-platform/README.md](docs/power-platform/README.md) | Teams / Outlook / Excel alerts, Power BI report |
-| [docs/jira/README.md](docs/jira/README.md) | Scrum project with 15 imported backlog items, GitHub integration |
-| [docs/confluence/](docs/confluence) | Architecture, runbook, decision log |
 
 ## API
 
-| Method | Path | Purpose |
+The full docs are at `/docs` when the app is running. The main endpoints:
+
+| Method | Path | What it does |
 |---|---|---|
-| POST | `/api/tickets` | Create a ticket: triage, save, suggested reply, escalation |
-| POST | `/api/triage` | Dry run: classify without saving |
-| GET | `/api/tickets?urgency=&status=&category=` | Queue with filters |
-| GET / PATCH | `/api/tickets/{reference}` | Read / change status. Accepts `SDC-000002`, `sdc-2` or just `2` |
-| GET | `/api/stats` | Counts by category, urgency, status, language |
-| GET | `/api/export.csv` | Flat export for Power BI |
-| GET | `/healthz`, `/readyz` | Liveness / readiness (incl. active integrations) |
-
-Example:
-
-```bash
-curl -X POST localhost:8000/api/tickets -H 'content-type: application/json' \
-  -d '{"message":"Meine Wallbox lädt nicht mehr, das Ladekabel blinkt rot.","customer_name":"Anna"}'
-```
-```json
-{ "reference": "SDC-000014", "language": "de", "category": "charging_ev", "urgency": "normal",
-  "confidence": 1.0, "engine": "rules", "suggested_reply": "Hallo Anna,\n\nvielen Dank für Ihre Anfrage zum Laden. ..." }
-```
+| POST | `/api/tickets` | Create a ticket (triage, save, suggested reply, escalation if urgent) |
+| POST | `/api/triage` | Only classify a message, don't save it |
+| GET | `/api/tickets` | The queue, filter with `?urgency=`, `?status=`, `?category=` |
+| GET / PATCH | `/api/tickets/{number}` | Read a ticket or change its status. `SDC-000002`, `sdc-2` and `2` all work |
+| GET | `/api/stats` | Counts per category, urgency, status, language |
+| GET | `/api/export.csv` | Everything as CSV, for Power BI |
+| GET | `/healthz`, `/readyz` | Health checks (readyz also shows which integrations are switched on) |
 
 ## Configuration
 
-Everything is optional. Without any variables the app runs with SQLite and the rule engine. See [.env.example](.env.example).
+Without any settings it runs with SQLite and the rule engine. Everything else is optional (see [.env.example](.env.example)):
 
-| Variable | Effect |
+| Variable | What it does |
 |---|---|
 | `DATABASE_URL` | e.g. `postgresql+psycopg://user:pass@host:5432/db` |
-| `OPENAI_API_KEY` or `AZURE_OPENAI_*` | Use an LLM for triage (falls back to rules on any error) |
-| `SERVICENOW_INSTANCE/USER/PASSWORD` | Create incidents for critical/high tickets |
-| `POWER_AUTOMATE_WEBHOOK_URL` | Call the alert flow for critical/high tickets |
-
-## How triage works
-
-- **Category:** weighted EN/DE keywords per category. The highest score wins, and confidence = winner's share of all matched weight. On a tie, roadside assistance wins (a stranded customer comes first).
-- **Urgency:** ordered rules. *Critical* = danger to people (accident, smoke, brake failure). *High* = car can't be driven, or legal threat. *Low* = "no rush", opening hours.
-- **Language:** stop-words, umlauts and German domain words, so even "Unfall! Rauch!" is detected as German.
-- **Explainable:** the response lists the matched keywords (`"matched": ["wallbox", "laden"]`).
-- **LLM safety rule:** if an LLM is configured, it can refine the category but **never lower a critical urgency** found by the rules.
+| `OPENAI_API_KEY` or `AZURE_OPENAI_*` | let an LLM help with triage |
+| `SERVICENOW_INSTANCE`, `_USER`, `_PASSWORD` | create incidents for critical/high tickets |
+| `POWER_AUTOMATE_WEBHOOK_URL` | send critical/high tickets to the alert flow |
 
 ## Tests
 
 ```bash
-pytest -q          # 31 tests: triage, API, integrations (mocked), LLM fallback
+pytest -q
 ruff check app tests
 ```
 
-CI also builds the Docker image, runs a smoke test against Postgres via docker-compose, and deploys to a real Kubernetes cluster (kind) inside GitHub Actions.
+There are 36 tests: the triage rules (English and German examples), the API, the ServiceNow and Power Automate calls (with fake responses), the LLM fallback, and one that checks an older database gets upgraded without losing data.
 
-## Limitations and next steps
+## What I'd do next
 
-- Rule engine: unusual wording can land in "general inquiry". Next: collect agent corrections and train a small classifier on them.
-- Integrations are fire-and-forget. Next: Azure Service Bus queue with retries.
-- No authentication on the demo UI. Next: Microsoft Entra ID login.
+- Keyword rules miss unusual wording. If agents correct categories in the UI, those corrections could train a small classifier later.
+- The ServiceNow and Power Automate calls are "fire and forget" right now. A queue with retries (e.g. Azure Service Bus) would be more reliable.
+- The demo has no login. In a real setup I'd put Microsoft Entra ID in front of it.
 
-## Licence
+## License
 
 MIT
