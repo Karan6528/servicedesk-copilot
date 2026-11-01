@@ -106,7 +106,7 @@ The full docs are at `/docs` when the app is running. The main endpoints:
 
 ## Configuration
 
-Without any settings it runs with SQLite and the rule engine. Everything else is optional (see [.env.example](.env.example)):
+Without any settings it runs with SQLite and the rule engine. Everything else is optional. Copy [.env.example](.env.example) to `.env`, fill in what you have, and start with `uvicorn app.main:app --reload --env-file .env`:
 
 | Variable | What it does |
 |---|---|

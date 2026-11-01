@@ -37,7 +37,13 @@ SERVICENOW_USER=admin
 SERVICENOW_PASSWORD=<password>
 ```
 
-Restart the app. `GET /readyz` should now show `"servicenow": true`.
+Restart the app so it reads the file:
+
+```bash
+uvicorn app.main:app --reload --env-file .env
+```
+
+`GET /readyz` should now show `"servicenow": true`.
 
 ## 4. Demo
 
